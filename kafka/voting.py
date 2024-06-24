@@ -35,7 +35,7 @@ if __name__ == '__main__':
     consumer = Consumer(
         consumer_conf | {
             'group.id': 'voting-group',
-            'auto.offset': 'earliest',
+            'auto.offset.reset': 'earliest',
             'enable.auto.commit': False
         }
     )

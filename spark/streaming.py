@@ -2,6 +2,8 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, TimestampType
 import pyspark.sql.functions as F
 
+KAFKA_SERVER = 'broker:29092'
+
 if __name__ == '__main__':
     spark = SparkSession.builder.appName('Realtime Voting').getOrCreate()
 
@@ -35,9 +37,9 @@ if __name__ == '__main__':
 
     votes_df = (spark.readStream
                 .format('kafka')
-                .option('kafka.bootstrap.servers', 'broker:29092')
+                .option('kafka.bootstrap.servers', KAFKA_SERVER)
                 .option('subscribe', 'votes')
-                .option('startingOffset', 'earliest')
+                .option('startingOffsets', 'earliest')
                 .load()
                 .selectExpr('CAST(value as STRING)')
                 .select(F.from_json(F.col('value'), vote_schema).alias('data'))
@@ -45,3 +47,33 @@ if __name__ == '__main__':
 
     # votes_df = votes_df.withColumn('voting_time', F.col('voting_time').cast(TimestampType())).withColumn()
     enriched_votes_df = votes_df.withWatermark('voting_time', '1 minute')
+
+    votes_per_candidate = enriched_votes_df.groupBy('candidate_id', 'candidate_name', 'party_affiliation',
+                                                    'photo_url').agg(F.sum('vote').alias('total_votes'))
+
+    turnout_by_location = enriched_votes_df.groupBy('address.state').count().alias('total_votes')
+
+    votes_per_candidate_to_kafka = (
+        votes_per_candidate.selectExpr('to_json(struct(*)) AS value')
+        .writeStream
+        .format('kafka')
+        .option('kafka.bootstrap.servers', KAFKA_SERVER)
+        .option('topic', 'votes_per_candidate')
+        .option('checkpointLocation', '/opt/checkpoints/per_candidate')
+        .outputMode('update')
+        .start()
+    )
+
+    turnout_by_location_to_kafka = (
+        turnout_by_location.selectExpr('to_json(struct(*)) AS value')
+        .writeStream
+        .format('kafka')
+        .option('kafka.bootstrap.servers', KAFKA_SERVER)
+        .option('topic', 'turnout_by_location')
+        .option('checkpointLocation', '/opt/checkpoints/turnout_by_location')
+        .outputMode('update')
+        .start()
+    )
+
+    votes_per_candidate_to_kafka.awaitTermination()
+    turnout_by_location_to_kafka.awaitTermination()

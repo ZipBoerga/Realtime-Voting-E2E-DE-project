@@ -1,26 +1,28 @@
 import json
-import random
 from typing import Optional
 
 import requests
 import psycopg2
+from psycopg2.errorcodes import UNIQUE_VIOLATION
+from psycopg2 import errors
 from confluent_kafka import SerializingProducer
 
 from utils import kafka_delivery_report
 
 BASE_URL = 'https://randomuser.me/api/?nat=gb'
 PARTIES = ["Management Party", "Savior Party", "Tech Republic Party"]
-random.seed(42)
+CANDIDATES_NUMBER = 3
+VOTERS_NUMBER = 3
 
 
-def generate_candidate_data(candidate_number, total_parties) -> Optional[dict]:
+def generate_candidate_data(candidate_number: int, parties: list[str]) -> Optional[dict]:
     response = requests.get(f'{BASE_URL}&gender={"female" if candidate_number % 2 == 0 else "male"}')
     if response.status_code == 200:
         raw_data = response.json().get('results')[0]
         return {
             "candidate_id": raw_data['login']['uuid'],
             "candidate_name": f"{raw_data['name']['first']} {raw_data['name']['last']}",
-            "party_affiliation": PARTIES[candidate_number % total_parties],
+            "party_affiliation": parties[candidate_number % len(parties)],
             "biography": "A brief bio of the candidate.",
             "campaign_platform": "Key campaign promises or platform.",
             "photo_url": raw_data['picture']['large']
@@ -72,8 +74,8 @@ if __name__ == '__main__':
     producer = SerializingProducer({'bootstrap.servers': 'localhost:9092'})
 
     candidate_counter = 0
-    while candidate_counter < 3:
-        candidate = generate_candidate_data(candidate_counter, 3)
+    while candidate_counter < CANDIDATES_NUMBER:
+        candidate = generate_candidate_data(candidate_counter, PARTIES)
         if not is_valid(candidate):
             print(f'error generating the candidate {candidate_counter}, will try to generate again')
             continue
@@ -93,7 +95,7 @@ if __name__ == '__main__':
 
     voters_counter = 0
 
-    while voters_counter < 1000:
+    while voters_counter < VOTERS_NUMBER:
         voter = generate_voter_data()
         if not is_valid(voter):
             print(f'error generating the voter {voters_counter}')
@@ -122,6 +124,10 @@ if __name__ == '__main__':
             )
             print(f'Successfully processed voter {voters_counter}')
             voters_counter = voters_counter + 1
+        except errors.lookup(UNIQUE_VIOLATION) as e:
+            print(f'Couldn\'t process the voter due to the uniqueness error: {e},'
+                  f' will retry it for the position {voters_counter}')
+            conn.rollback()
         except Exception as e:
             print(f'Couldn\'t process the voter due to the error: {e}, will retry it for the position {voters_counter}')
 
