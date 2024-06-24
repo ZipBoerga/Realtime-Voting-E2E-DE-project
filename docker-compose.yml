@@ -69,7 +69,7 @@ services:
 
   # spark
   spark-master:
-    image: bitnami/spark:latest
+    image: bitnami/spark:3.4.0
     container_name: spark-master
     hostname: spark-master
     profiles:
@@ -84,9 +84,11 @@ services:
     ports:
       - "8080:8080"
       - "7077:7077"
+    volumes:
+      - ./spark:/opt/spark-apps
 
   spark-worker:
-    image: bitnami/spark:latest
+    image: bitnami/spark:3.4.0
     container_name: spark-worker
     profiles:
       - spark
