@@ -4,3 +4,7 @@ simplejson
 requests
 pyspark
 streamlit
+kafka-python
+pandas
+matplotlib
+streamlit_autorefresh

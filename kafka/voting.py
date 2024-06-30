@@ -61,7 +61,7 @@ if __name__ == '__main__':
                     | chosen_candidate
                     | {
                         'voting_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                        'vote': 1
+                        'vote': 1,
                     }
                 )
 
