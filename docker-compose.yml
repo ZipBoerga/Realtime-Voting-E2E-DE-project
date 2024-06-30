@@ -85,8 +85,8 @@ services:
       - "8080:8080"
       - "7077:7077"
     volumes:
-      - ./spark:/opt/spark-apps
-      - spark_kafka_checkpoints:/opt/checkpoints
+      - ./spark:/opt/bitnami/spark/spark-apps
+      - spark_kafka_checkpoints:/opt/bitnami/spark/checkpoints
 
   spark-worker:
     image: bitnami/spark:3.4.0

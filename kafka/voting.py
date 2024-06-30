@@ -7,7 +7,7 @@ from confluent_kafka import Consumer, KafkaError, SerializingProducer
 
 from utils import kafka_delivery_report
 
-consumer_conf = {'bootstrap.server': 'localhost:9092'}
+kafka_conf = {'bootstrap.servers': 'localhost:9092'}
 
 if __name__ == '__main__':
     conn = psycopg2.connect(
@@ -31,27 +31,27 @@ if __name__ == '__main__':
     if len(candidates) == 0:
         raise Exception('No candidates available in database')
 
-    producer = SerializingProducer({'bootstrap.servers': 'localhost:9092'})
+    producer = SerializingProducer(kafka_conf)
     consumer = Consumer(
-        consumer_conf
+        kafka_conf
         | {
             'group.id': 'voting-group',
             'auto.offset.reset': 'earliest',
             'enable.auto.commit': False,
         }
     )
-    consumer.subscribe(['voter_topics'])
+    consumer.subscribe(['voters'])
 
     try:
         while True:
-            msg = consumer.poll(timeout=1.0)
+            msg = consumer.poll()
             if msg is None:
                 continue
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     continue
                 else:
-                    print(msg.error())
+                    print(f'The kafka error {msg.error()}')
                     break
             else:
                 voter = json.loads(msg.value().decode('utf-8'))
@@ -61,7 +61,7 @@ if __name__ == '__main__':
                     | chosen_candidate
                     | {
                         'voting_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                        'vote': 1,
+                        'vote': 1
                     }
                 )
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
                     INSERT INTO votes (voter_id, candidate_id, voting_time)
                     VALUES (%s, %s, %s)                    
                 ''',
-                    (voter['voter_id'], voter['candidate_id'], voter['voting_time']),
+                    (vote['voter_id'], vote['candidate_id'], vote['voting_time']),
                 )
 
                 producer.produce(
@@ -87,4 +87,4 @@ if __name__ == '__main__':
                 producer.poll(0)
                 conn.commit()
     except Exception as e:
-        print(e)
+        print(f'The exception: {e}')
